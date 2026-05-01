@@ -1,7 +1,7 @@
 name: "Android Build, Sign & Release"
-description: "Builds an Android app using Gradle, signs the APK with a provided or repo-based keystore and outputs the signed artifact."
+description: "Builds an Android app using Gradle, detects version, creates git tags, signs APK/AAB artifacts and outputs final release-ready files."
 author: "FreetimeMaker"
-branding: 
+branding:
   icon: activity
   color: green
 
@@ -19,30 +19,39 @@ inputs:
     description: "Gradle task to run"
     default: "assembleRelease"
   use_repo_keystore:
-    description: "Use a keystore stored in the repository instead of Base64 input"
+    description: "Use a keystore stored in the repository"
     default: "false"
   repo_keystore_path:
-    description: "Path to the keystore inside the repository"
+    description: "Path to the repo keystore"
     default: "release-key.jks"
+  auto_tag:
+    description: "Automatically create git tag based on versionName"
+    default: "true"
 
 outputs:
   signed_apk:
-    description: "Path to the signed APK"
+    description: "Path to the final signed APK"
+  version_name:
+    description: "Detected versionName"
+  version_code:
+    description: "Detected versionCode"
 
 runs:
   using: "composite"
   steps:
 
+    # -----------------------------
+    # 1. Select keystore source
+    # -----------------------------
     - name: Select keystore source
       id: select_keystore
       shell: bash
       run: |
         set -e
-
         if [[ "${{ inputs.use_repo_keystore }}" == "true" ]]; then
           echo "Using repository keystore: ${{ inputs.repo_keystore_path }}"
           if [[ ! -f "${{ inputs.repo_keystore_path }}" ]]; then
-            echo "ERROR: repo keystore not found at ${{ inputs.repo_keystore_path }}"
+            echo "ERROR: repo keystore not found"
             exit 1
           fi
           echo "keystore_path=${{ inputs.repo_keystore_path }}" >> $GITHUB_OUTPUT
@@ -52,16 +61,55 @@ runs:
           echo "keystore_path=release-key.jks" >> $GITHUB_OUTPUT
         fi
 
+    # -----------------------------
+    # 2. Make Gradle executable
+    # -----------------------------
     - name: Make Gradle executable
       shell: bash
       run: chmod +x ./gradlew
 
+    # -----------------------------
+    # 3. Detect versionName + versionCode
+    # -----------------------------
+    - name: Detect version
+      id: version
+      shell: bash
+      run: |
+        set -e
+        VERSION_NAME=$(grep versionName -R app/build.gradle* | sed 's/.*"\(.*\)".*/\1/')
+        VERSION_CODE=$(grep versionCode -R app/build.gradle* | sed 's/.* //')
+        echo "Detected versionName: $VERSION_NAME"
+        echo "Detected versionCode: $VERSION_CODE"
+        echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+        echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+
+    # -----------------------------
+    # 4. Auto-create git tag
+    # -----------------------------
+    - name: Create git tag
+      if: ${{ inputs.auto_tag == 'true' }}
+      shell: bash
+      run: |
+        set -e
+        TAG="v${{ steps.version.outputs.version_name }}"
+        echo "Creating tag: $TAG"
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git tag -f "$TAG"
+        git push -f origin "$TAG"
+
+    # -----------------------------
+    # 5. Build Android App
+    # -----------------------------
     - name: Build Android App
       shell: bash
       run: |
         set -e
         ./gradlew ${{ inputs.gradle_task }}
 
+    # -----------------------------
+    # 6. Locate apksigner
+    # -----------------------------
     - name: Locate apksigner
       id: find_apksigner
       shell: bash
@@ -74,6 +122,9 @@ runs:
         fi
         echo "apksigner=$APKSIGNER" >> $GITHUB_OUTPUT
 
+    # -----------------------------
+    # 7. Find unsigned APK
+    # -----------------------------
     - name: Find unsigned APK
       id: find_apk
       shell: bash
@@ -86,6 +137,9 @@ runs:
         fi
         echo "unsigned_apk=$UNSIGNED" >> $GITHUB_OUTPUT
 
+    # -----------------------------
+    # 8. Sign APK
+    # -----------------------------
     - name: Sign APK
       id: sign
       shell: bash
@@ -103,6 +157,9 @@ runs:
 
         echo "signed_apk=$SIGNED" >> $GITHUB_OUTPUT
 
+    # -----------------------------
+    # 9. Verify signature
+    # -----------------------------
     - name: Verify signature
       shell: bash
       run: |
