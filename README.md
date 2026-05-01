@@ -79,10 +79,11 @@ jobs:
         with:
           tag_name: v${{ steps.android.outputs.version_name }}
           files: ${{ steps.android.outputs.signed_apk }}
+```
 
-🧪 Example Workflow (Keystore from repository)
+## 🧪 Example Workflow (Keystore from repository)
 
-´´´yaml
+```yaml
 steps:
   - uses: actions/checkout@v4
     with:
@@ -102,18 +103,18 @@ steps:
     with:
       name: Signed APK
       path: ${{ steps.android.outputs.signed_apk }}
+```
 
-🔐 Keystore Options
+### 🔐 Keystore Options
 1. Base64 Keystore (recommended)
 
-´´´shell
-base64 -w 0 my-release-key.jks > keystore.b64
+Just run this command: base64 -w 0 my-release-key.jks > keystore.b64
 
-2. Repository Keystore
+## 2. Repository Keystore
 Place your keystore anywhere in the repo:
 keystore/release.jks
 
-🏷️ Version Detection
+### 🏷️ Version Detection
 Extracts:
   versionName
   versionCode
@@ -122,10 +123,10 @@ from:
   app/build.gradle
   app/build.gradle.kts
 
-🏷️ Automatic Tag Creation
+## 🏷️ Automatic Tag Creation
 If auto_tag: true, the Action creates:
   v<versionName>
 and pushes it automatically.
 
-📘 License
+# 📘 License
 MIT
