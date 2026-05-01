@@ -1,5 +1,5 @@
 name: "Android Build, Sign & Release"
-description: "Builds an Android app using Gradle, detects version, creates git tags, signs APK/AAB artifacts and outputs final release-ready files."
+description: "Builds an Android app using Gradle, detects version, creates git tags and signs APKs."
 author: "FreetimeMaker"
 branding:
   icon: activity
