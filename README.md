@@ -1,6 +1,6 @@
-# Android Build, Scan, Sign & Release
+# Android Build, Sign & Release
 
-A reproducible, CI‑friendly GitHub Action that builds Android apps using Gradle, performs optional security scans, signs APK/AAB artifacts with a provided keystore, verifies the signature and outputs the final release‑ready files.  
+A reproducible, CI‑friendly GitHub Action that builds Android apps using Gradle, signs APK/AAB artifacts with a provided keystore and outputs the final release‑ready files.  
 Works on all GitHub‑hosted runners without Node or Docker — pure composite action.
 
 ---
@@ -9,8 +9,6 @@ Works on all GitHub‑hosted runners without Node or Docker — pure composite a
 
 - 🔧 Build Android apps using any Gradle task (default: `assembleRelease`)
 - 🔐 Sign APK/AAB artifacts using `apksigner`
-- ✔️ Verify signatures for correctness
-- 🛡️ Optional security scanning
 - 📦 Output final signed artifacts
 - 🏁 Fully reproducible, no external dependencies
 - 🌐 Works on all GitHub‑hosted runners
@@ -27,7 +25,6 @@ Works on all GitHub‑hosted runners without Node or Docker — pure composite a
 | `key_alias` | yes | Alias of the signing key |
 | `key_password` | yes | Password for the signing key |
 | `gradle_task` | no | Gradle task to run (default: `assembleRelease`) |
-| `scan` | no | Enable security scanning (`true` / `false`) |
 
 ---
 
@@ -64,7 +61,6 @@ jobs:
           key_alias: ${{ secrets.KEY_ALIAS }}
           key_password: ${{ secrets.KEY_PASSWORD }}
           gradle_task: assembleRelease
-          scan: true
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v7
