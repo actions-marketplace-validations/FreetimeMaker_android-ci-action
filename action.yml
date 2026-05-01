@@ -1,6 +1,9 @@
 name: "Android Build, Sign & Release"
 description: "Builds an Android app using Gradle, signs the APK with a provided keystore and outputs the signed artifact."
 author: "FreetimeMaker"
+branding: 
+  icon: activity
+  color: green
 
 inputs:
   keystore:
