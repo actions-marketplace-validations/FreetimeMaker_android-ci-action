@@ -31,7 +31,6 @@ jobs:
           key_alias: ${{ secrets.KEY_ALIAS }}
           key_password: ${{ secrets.KEY_PASSWORD }}
           gradle_task: assembleRelease
-          scan: false
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v7
