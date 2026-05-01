@@ -26,24 +26,48 @@ runs:
     - name: Decode keystore
       shell: bash
       run: |
+        set -e
         echo "${{ inputs.keystore }}" | base64 -d > release-key.jks
+
+    - name: Make Gradle executable
+      shell: bash
+      run: chmod +x ./gradlew
 
     - name: Build Android App
       shell: bash
-      run: ./gradlew ${{ inputs.gradle_task }}
+      run: |
+        set -e
+        ./gradlew ${{ inputs.gradle_task }}
 
     - name: Locate apksigner
       id: find_apksigner
       shell: bash
       run: |
+        set -e
         APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools -name apksigner | head -n 1)
+        if [ -z "$APKSIGNER" ]; then
+          echo "ERROR: apksigner not found"
+          exit 1
+        fi
         echo "apksigner=$APKSIGNER" >> $GITHUB_OUTPUT
+
+    - name: Find unsigned APK
+      id: find_apk
+      shell: bash
+      run: |
+        set -e
+        UNSIGNED=$(find app/build/outputs/apk -name "*-unsigned.apk" | head -n 1)
+        if [ -z "$UNSIGNED" ]; then
+          echo "ERROR: No unsigned APK found"
+          exit 1
+        fi
+        echo "unsigned_apk=$UNSIGNED" >> $GITHUB_OUTPUT
 
     - name: Sign APK
       id: sign
       shell: bash
       run: |
-        UNSIGNED=$(find . -name "*-unsigned.apk" | head -n 1)
+        set -e
         SIGNED="app-release-signed.apk"
 
         "${{ steps.find_apksigner.outputs.apksigner }}" sign \
@@ -52,12 +76,13 @@ runs:
           --ks-key-alias ${{ inputs.key_alias }} \
           --key-pass pass:${{ inputs.key_password }} \
           --out "$SIGNED" \
-          "$UNSIGNED"
+          "${{ steps.find_apk.outputs.unsigned_apk }}"
 
         echo "signed_apk=$SIGNED" >> $GITHUB_OUTPUT
 
     - name: Verify signature
       shell: bash
       run: |
+        set -e
         "${{ steps.find_apksigner.outputs.apksigner }}" verify --verbose \
           "${{ steps.sign.outputs.signed_apk }}"
