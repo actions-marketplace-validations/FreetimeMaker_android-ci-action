@@ -1,5 +1,5 @@
 name: "Android Build, Sign & Release"
-description: "Builds an Android app using Gradle, signs the APK with a provided keystore and outputs the signed artifact."
+description: "Builds an Android app using Gradle, signs the APK with a provided or repo-based keystore and outputs the signed artifact."
 author: "FreetimeMaker"
 branding: 
   icon: activity
@@ -7,8 +7,8 @@ branding:
 
 inputs:
   keystore:
-    description: "Base64 encoded keystore"
-    required: true
+    description: "Base64 encoded keystore (ignored if use_repo_keystore=true)"
+    required: false
   keystore_password:
     required: true
   key_alias:
@@ -18,6 +18,12 @@ inputs:
   gradle_task:
     description: "Gradle task to run"
     default: "assembleRelease"
+  use_repo_keystore:
+    description: "Use a keystore stored in the repository instead of Base64 input"
+    default: "false"
+  repo_keystore_path:
+    description: "Path to the keystore inside the repository"
+    default: "release-key.jks"
 
 outputs:
   signed_apk:
@@ -26,11 +32,25 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Decode keystore
+
+    - name: Select keystore source
+      id: select_keystore
       shell: bash
       run: |
         set -e
-        echo "${{ inputs.keystore }}" | base64 -d > release-key.jks
+
+        if [[ "${{ inputs.use_repo_keystore }}" == "true" ]]; then
+          echo "Using repository keystore: ${{ inputs.repo_keystore_path }}"
+          if [[ ! -f "${{ inputs.repo_keystore_path }}" ]]; then
+            echo "ERROR: repo keystore not found at ${{ inputs.repo_keystore_path }}"
+            exit 1
+          fi
+          echo "keystore_path=${{ inputs.repo_keystore_path }}" >> $GITHUB_OUTPUT
+        else
+          echo "Using Base64 keystore input"
+          echo "${{ inputs.keystore }}" | base64 -d > release-key.jks
+          echo "keystore_path=release-key.jks" >> $GITHUB_OUTPUT
+        fi
 
     - name: Make Gradle executable
       shell: bash
@@ -74,7 +94,7 @@ runs:
         SIGNED="app-release-signed.apk"
 
         "${{ steps.find_apksigner.outputs.apksigner }}" sign \
-          --ks release-key.jks \
+          --ks "${{ steps.select_keystore.outputs.keystore_path }}" \
           --ks-pass pass:${{ inputs.keystore_password }} \
           --ks-key-alias ${{ inputs.key_alias }} \
           --key-pass pass:${{ inputs.key_password }} \
