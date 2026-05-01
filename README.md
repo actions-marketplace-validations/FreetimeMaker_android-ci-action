@@ -1,6 +1,6 @@
 # Android Build, Sign & Release
 
-A reproducible, CI‑friendly GitHub Action that builds Android apps using Gradle, signs APK/AAB artifacts with a provided keystore and outputs the final release‑ready files.  
+A reproducible, CI‑friendly GitHub Action that builds Android apps using Gradle, signs APK/AAB artifacts with a provided keystore or a keystore stored inside the repository, and outputs the final release‑ready files.  
 Works on all GitHub‑hosted runners without Node or Docker — pure composite action.
 
 ---
@@ -9,6 +9,7 @@ Works on all GitHub‑hosted runners without Node or Docker — pure composite a
 
 - 🔧 Build Android apps using any Gradle task (default: `assembleRelease`)
 - 🔐 Sign APK/AAB artifacts using `apksigner`
+- 🗂️ Supports Base64 keystores **and** repo‑based keystores
 - 📦 Output final signed artifacts
 - 🏁 Fully reproducible, no external dependencies
 - 🌐 Works on all GitHub‑hosted runners
@@ -20,11 +21,13 @@ Works on all GitHub‑hosted runners without Node or Docker — pure composite a
 
 | Name | Required | Description |
 |------|----------|-------------|
-| `keystore` | yes | Base64‑encoded keystore file |
+| `keystore` | no | Base64‑encoded keystore file (ignored if `use_repo_keystore=true`) |
 | `keystore_password` | yes | Password for the keystore |
 | `key_alias` | yes | Alias of the signing key |
 | `key_password` | yes | Password for the signing key |
 | `gradle_task` | no | Gradle task to run (default: `assembleRelease`) |
+| `use_repo_keystore` | no | Use a keystore stored in the repository (`true` / `false`) |
+| `repo_keystore_path` | no | Path to the repo keystore (default: `release-key.jks`) |
 
 ---
 
@@ -37,7 +40,7 @@ Works on all GitHub‑hosted runners without Node or Docker — pure composite a
 
 ---
 
-## 🧪 Example Workflow
+## 🧪 Example Workflow (Base64 keystore)
 
 ```yaml
 name: Build Android App
@@ -53,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: FreetimeMaker/android-build-sign-release@v1
+      - uses: FreetimeMaker/android-build-sign-release@v1.0.1
         id: android
         with:
           keystore: ${{ secrets.KEYSTORE_BASE64 }}
