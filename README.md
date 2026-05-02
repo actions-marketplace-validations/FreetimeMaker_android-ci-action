@@ -110,11 +110,11 @@ steps:
 
 Just run this command: base64 -w 0 my-release-key.jks > keystore.b64
 
-## 2. Repository Keystore
+### 2. Repository Keystore
 Place your keystore anywhere in the repo:
 keystore/release.jks
 
-### 🏷️ Version Detection
+## 🏷️ Version Detection
 Extracts:
   versionName
   versionCode
