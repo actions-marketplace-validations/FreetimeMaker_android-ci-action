@@ -1,6 +1,6 @@
 # Android Build, Sign & Release
 
-A reproducible, CI‑friendly GitHub Action that builds Android apps using Gradle, detects the version from your Gradle files, automatically creates git tags, signs APK/AAB artifacts using either a Base64 keystore or a repository keystore, and outputs final release‑ready files.  
+A reproducible, CI‑friendly GitHub Action that builds Android apps using Gradle, detects the version from your Gradle files, optionally scans the unsigned APK with VirusTotal, automatically creates git tags, signs APK/AAB artifacts using either a Base64 keystore or a repository keystore, and outputs final release‑ready files.  
 Runs on all GitHub‑hosted runners without Node or Docker — pure composite action.
 
 ---
@@ -10,6 +10,7 @@ Runs on all GitHub‑hosted runners without Node or Docker — pure composite ac
 - 🔧 Build Android apps using any Gradle task (default: `assembleRelease`)
 - 🔐 Sign APK/AAB artifacts using `apksigner`
 - 🗂️ Supports Base64 keystores **and** repo‑based keystores
+- 🦠 Optional VirusTotal scan **before signing**
 - 🏷️ Automatic version detection (`versionName` + `versionCode`)
 - 🏷️ Automatic git tag creation (`v<versionName>`)
 - 📦 Outputs final signed artifacts
@@ -30,6 +31,9 @@ Runs on all GitHub‑hosted runners without Node or Docker — pure composite ac
 | `use_repo_keystore` | no | Use a keystore stored in the repository (`true` / `false`) |
 | `repo_keystore_path` | no | Path to the repo keystore (default: `release-key.jks`) |
 | `auto_tag` | no | Automatically create git tag based on versionName (`true` / `false`) |
+| `virustotal_scan` | no | Scan unsigned APK with VirusTotal before signing (`true` / `false`) |
+| `virustotal_api_key` | no | VirusTotal API key (required if `virustotal_scan=true`) |
+| `virustotal_timeout` | no | Max seconds to wait for VirusTotal analysis (default: `120`) |
 
 ---
 
@@ -43,7 +47,7 @@ Runs on all GitHub‑hosted runners without Node or Docker — pure composite ac
 
 ---
 
-## 🧪 Example Workflow (Base64 keystore + auto‑tagging)
+## 🧪 Example Workflow (Base64 keystore + VirusTotal + auto‑tagging)
 
 ```yaml
 name: Build Android App
@@ -69,6 +73,8 @@ jobs:
           key_alias: ${{ secrets.KEY_ALIAS }}
           key_password: ${{ secrets.KEY_PASSWORD }}
           auto_tag: true
+          virustotal_scan: true
+          virustotal_api_key: ${{ secrets.VT_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -112,8 +118,34 @@ Just run this command: base64 -w 0 my-release-key.jks > keystore.b64
 
 #### 2. Repository Keystore
 Place your keystore anywhere in the repo: keystore/release.jks
+Use it like this: 
+use_repo_keystore: true
+repo_keystore_path: "keystore/release.jks"
 
-## 🏷️ Version Detection
+### 🦠 VirusTotal Scan
+If enabled, the Action will:
+
+Build the app
+
+Locate the unsigned APK
+
+Upload it to VirusTotal
+
+Wait for the analysis
+
+Fail the workflow if:
+
+any engine reports malicious > 0
+
+the scan times out
+
+the API key is missing
+
+Enable it like this:
+virustotal_scan: true
+virustotal_api_key: ${{ secrets.VT_API_KEY }}
+
+### 🏷️ Version Detection
 Extracts:
   versionName
   versionCode
@@ -122,10 +154,18 @@ from:
   app/build.gradle
   app/build.gradle.kts
 
-## 🏷️ Automatic Tag Creation
+Example:
+  versionName "1.4.2"
+  versionCode 42
+
+Outputs:
+  version_name = 1.4.2
+  version_code = 42
+
+### 🏷️ Automatic Tag Creation
 If auto_tag: true, the Action creates:
   v<versionName>
 and pushes it automatically.
 
-# 📘 License
+## 📘 License
 MIT
