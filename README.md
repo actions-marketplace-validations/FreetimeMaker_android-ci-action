@@ -106,13 +106,12 @@ steps:
 ```
 
 ### 🔐 Keystore Options
-1. Base64 Keystore (recommended)
+#### 1. Base64 Keystore (recommended)
 
 Just run this command: base64 -w 0 my-release-key.jks > keystore.b64
 
-### 2. Repository Keystore
-Place your keystore anywhere in the repo:
-keystore/release.jks
+#### 2. Repository Keystore
+Place your keystore anywhere in the repo: keystore/release.jks
 
 ## 🏷️ Version Detection
 Extracts:
