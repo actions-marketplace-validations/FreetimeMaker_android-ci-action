@@ -1,5 +1,5 @@
 name: "Android Build, Sign & Release"
-description: "Builds an Android app using Gradle, detects version, creates git tags and signs APKs."
+description: "Builds an Android app using Gradle, detects version, creates git tags, scans with VirusTotal and signs."
 author: "FreetimeMaker"
 branding:
   icon: activity
@@ -27,6 +27,15 @@ inputs:
   auto_tag:
     description: "Automatically create git tag based on versionName"
     default: "true"
+  virustotal_scan:
+    description: "Enable VirusTotal scanning before signing"
+    default: "false"
+  virustotal_api_key:
+    description: "VirusTotal API key"
+    required: false
+  virustotal_timeout:
+    description: "Max seconds to wait for VirusTotal analysis"
+    default: "120"
 
 outputs:
   signed_apk:
@@ -40,9 +49,9 @@ runs:
   using: "composite"
   steps:
 
-    # -----------------------------
+    # ---------------------------------------------------------
     # 1. Select keystore source
-    # -----------------------------
+    # ---------------------------------------------------------
     - name: Select keystore source
       id: select_keystore
       shell: bash
@@ -61,16 +70,16 @@ runs:
           echo "keystore_path=release-key.jks" >> $GITHUB_OUTPUT
         fi
 
-    # -----------------------------
+    # ---------------------------------------------------------
     # 2. Make Gradle executable
-    # -----------------------------
+    # ---------------------------------------------------------
     - name: Make Gradle executable
       shell: bash
       run: chmod +x ./gradlew
 
-    # -----------------------------
+    # ---------------------------------------------------------
     # 3. Detect versionName + versionCode
-    # -----------------------------
+    # ---------------------------------------------------------
     - name: Detect version
       id: version
       shell: bash
@@ -78,75 +87,132 @@ runs:
         set -e
         VERSION_NAME=$(grep versionName -R app/build.gradle* | sed 's/.*"\(.*\)".*/\1/')
         VERSION_CODE=$(grep versionCode -R app/build.gradle* | sed 's/.* //')
-        echo "Detected versionName: $VERSION_NAME"
-        echo "Detected versionCode: $VERSION_CODE"
         echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
         echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
 
-    # -----------------------------
+    # ---------------------------------------------------------
     # 4. Auto-create git tag
-    # -----------------------------
+    # ---------------------------------------------------------
     - name: Create git tag
       if: ${{ inputs.auto_tag == 'true' }}
       shell: bash
       run: |
         set -e
         TAG="v${{ steps.version.outputs.version_name }}"
-        echo "Creating tag: $TAG"
         git config user.name "github-actions"
         git config user.email "github-actions@github.com"
         git tag -f "$TAG"
         git push -f origin "$TAG"
 
-    # -----------------------------
+    # ---------------------------------------------------------
     # 5. Build Android App
-    # -----------------------------
+    # ---------------------------------------------------------
     - name: Build Android App
       shell: bash
       run: |
         set -e
         ./gradlew ${{ inputs.gradle_task }}
 
-    # -----------------------------
-    # 6. Locate apksigner
-    # -----------------------------
+    # ---------------------------------------------------------
+    # 6. VirusTotal Scan (unsigned APK)
+    # ---------------------------------------------------------
+    - name: VirusTotal Scan (unsigned APK)
+      if: ${{ inputs.virustotal_scan == 'true' }}
+      id: vt_scan
+      shell: bash
+      run: |
+        set -e
+
+        if [[ -z "${{ inputs.virustotal_api_key }}" ]]; then
+          echo "ERROR: VirusTotal scan enabled but no API key provided"
+          exit 1
+        fi
+
+        echo "Locating unsigned APK for VirusTotal scan..."
+        UNSIGNED=$(find app/build/outputs/apk -name "*-unsigned.apk" | head -n 1)
+
+        if [[ -z "$UNSIGNED" ]]; then
+          echo "ERROR: No unsigned APK found for VirusTotal scan"
+          exit 1
+        fi
+
+        echo "Uploading APK to VirusTotal..."
+        RESPONSE=$(curl -s -X POST "https://www.virustotal.com/api/v3/files" \
+          -H "x-apikey: ${{ inputs.virustotal_api_key }}" \
+          --form "file=@${UNSIGNED}")
+
+        ANALYSIS_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*' | cut -d'"' -f4)
+
+        if [[ -z "$ANALYSIS_ID" ]]; then
+          echo "ERROR: Failed to upload file to VirusTotal"
+          echo "$RESPONSE"
+          exit 1
+        fi
+
+        echo "VirusTotal analysis ID: $ANALYSIS_ID"
+        echo "Waiting for analysis result..."
+
+        TIMEOUT=${{ inputs.virustotal_timeout }}
+        ELAPSED=0
+
+        while [[ $ELAPSED -lt $TIMEOUT ]]; do
+          RESULT=$(curl -s -X GET "https://www.virustotal.com/api/v3/analyses/$ANALYSIS_ID" \
+            -H "x-apikey: ${{ inputs.virustotal_api_key }}")
+
+          STATUS=$(echo "$RESULT" | grep -o '"status":"[^"]*' | cut -d'"' -f4)
+
+          if [[ "$STATUS" == "completed" ]]; then
+            MALICIOUS=$(echo "$RESULT" | grep -o '"malicious":[0-9]*' | cut -d':' -f2)
+            echo "VirusTotal malicious count: $MALICIOUS"
+
+            if [[ "$MALICIOUS" != "0" ]]; then
+              echo "ERROR: VirusTotal detected malicious content"
+              echo "$RESULT"
+              exit 1
+            fi
+
+            echo "VirusTotal scan passed"
+            exit 0
+          fi
+
+          sleep 5
+          ELAPSED=$((ELAPSED + 5))
+        done
+
+        echo "ERROR: VirusTotal scan timed out after ${TIMEOUT}s"
+        exit 1
+
+    # ---------------------------------------------------------
+    # 7. Locate apksigner
+    # ---------------------------------------------------------
     - name: Locate apksigner
       id: find_apksigner
       shell: bash
       run: |
         set -e
         APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools -name apksigner | head -n 1)
-        if [ -z "$APKSIGNER" ]; then
-          echo "ERROR: apksigner not found"
-          exit 1
-        fi
         echo "apksigner=$APKSIGNER" >> $GITHUB_OUTPUT
 
-    # -----------------------------
-    # 7. Find unsigned APK
-    # -----------------------------
+    # ---------------------------------------------------------
+    # 8. Find unsigned APK
+    # ---------------------------------------------------------
     - name: Find unsigned APK
       id: find_apk
       shell: bash
       run: |
         set -e
         UNSIGNED=$(find app/build/outputs/apk -name "*-unsigned.apk" | head -n 1)
-        if [ -z "$UNSIGNED" ]; then
-          echo "ERROR: No unsigned APK found"
-          exit 1
-        fi
         echo "unsigned_apk=$UNSIGNED" >> $GITHUB_OUTPUT
 
-    # -----------------------------
-    # 8. Sign APK
-    # -----------------------------
+    # ---------------------------------------------------------
+    # 9. Sign APK
+    # ---------------------------------------------------------
     - name: Sign APK
       id: sign
       shell: bash
       run: |
         set -e
         SIGNED="app-release-signed.apk"
-
         "${{ steps.find_apksigner.outputs.apksigner }}" sign \
           --ks "${{ steps.select_keystore.outputs.keystore_path }}" \
           --ks-pass pass:${{ inputs.keystore_password }} \
@@ -154,12 +220,11 @@ runs:
           --key-pass pass:${{ inputs.key_password }} \
           --out "$SIGNED" \
           "${{ steps.find_apk.outputs.unsigned_apk }}"
-
         echo "signed_apk=$SIGNED" >> $GITHUB_OUTPUT
 
-    # -----------------------------
-    # 9. Verify signature
-    # -----------------------------
+    # ---------------------------------------------------------
+    # 10. Verify signature
+    # ---------------------------------------------------------
     - name: Verify signature
       shell: bash
       run: |
