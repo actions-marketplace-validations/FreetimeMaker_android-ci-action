@@ -65,7 +65,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: FreetimeMaker/android-build-sign-release@v1.1.0
+      - uses: FreetimeMaker/android-build-sign-release@v1.2.0
         id: android
         with:
           keystore: ${{ secrets.KEYSTORE_BASE64 }}
@@ -95,7 +95,7 @@ steps:
     with:
       fetch-depth: 0
 
-  - uses: FreetimeMaker/android-build-sign-release@v1.1.0
+  - uses: FreetimeMaker/android-build-sign-release@v1.2.0
     id: android
     with:
       use_repo_keystore: true
